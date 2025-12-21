@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Booking;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
 
 class StaffBookingController extends Controller
 {
@@ -13,9 +12,6 @@ class StaffBookingController extends Controller
     // BAGIAN 1: JADWAL & OPERASIONAL (CHECK-IN / START / FINISH)
     // ==========================================================
 
-    /**
-     * Menampilkan halaman jadwal hari ini.
-     */
     public function index(Request $request)
     {
         $query = Booking::query();
@@ -32,72 +28,70 @@ class StaffBookingController extends Controller
             });
         }
 
-        // Urutkan berdasarkan jam mulai (pagi ke malam)
+        // Urutkan berdasarkan jam mulai
         $bookings = $query->orderBy('jam_mulai', 'asc')->get();
 
         return view('staff.jadwal', compact('bookings'));
     }
 
-    /**
-     * Menangani aksi cepat: Check-in Kedatangan & Mulai Main (Start).
-     */
     public function action(Request $request, $id)
     {
         $booking = Booking::findOrFail($id);
 
         if ($request->action == 'checkin') {
-            // Konfirmasi orangnya sudah datang
             $booking->konfirmasi_datang = true;
             $booking->save();
-            return redirect()->back()->with('success', "Pelanggan {$booking->nama_pelanggan} berhasil Check-in.");
+            return redirect()->back()->with('success', "Pelanggan {$booking->nama_pelanggan} Check-in.");
         
         } elseif ($request->action == 'start') {
-            // Mulai waktu bermain (Status berubah jadi Aktif/Playing)
             $booking->status_booking = 'aktif';
             $booking->save();
-            return redirect()->back()->with('success', "Sesi lapangan untuk {$booking->nama_pelanggan} DIMULAI.");
+            return redirect()->back()->with('success', "Sesi dimulai.");
         }
 
         return redirect()->back();
     }
 
-    /**
-     * Menangani penyelesaian sesi (Finish), termasuk input denda/jam tambahan.
-     */
    public function finish(Request $request, $id)
 {
     $booking = Booking::findOrFail($id);
 
-    $denda_manual = $request->denda ? str_replace('.', '', $request->denda) : 0;
+    // 1. Bersihkan format input uang (misal "50.000" jadi "50000")
+    // Jika tidak ada denda, set ke 0
+    $denda_kerusakan = $request->denda ? (int) str_replace('.', '', $request->denda) : 0;
+
+    // 2. Ambil jam tambahan
     $jam_tambahan = (int) $request->jam_tambahan;
-    $biaya_waktu  = $jam_tambahan * 50000;
 
-    $total_bayar  = $denda_manual + $biaya_waktu;
-
+    // 3. Update Data Booking
+    // PENTING: Jangan gabung biaya waktu ke kolom 'denda'. 
+    // Biarkan 'denda' khusus untuk kerusakan, agar di struk rinciannya rapi.
+    
     $booking->update([
-        'status_booking' => 'selesai',
-        'jam_tambahan'   => $jam_tambahan,
-        'denda'          => $total_bayar,
+        'status_booking'    => 'selesai',
+        'status_pembayaran' => 'lunas', // Langsung set lunas
+        'jam_tambahan'      => $jam_tambahan,
+        'denda'             => $denda_kerusakan, // Hanya nominal denda/kerusakan       
+        'metode_pembayaran' => $request->metode_pembayaran // 'cash' atau 'qris'
     ]);
 
-    return redirect()->back()->with('success', 'Sesi selesai. Total: Rp ' . number_format($total_bayar));
+    // Opsi: Jika di database ada kolom 'total_harga', Anda bisa update di sini:
+    // $harga_normal   = $booking->durasi * 50000;
+    // $harga_tambahan = $jam_tambahan * 55000;
+    // $booking->total_harga = $harga_normal + $harga_tambahan + $denda_kerusakan;
+    // $booking->save();
+
+    return redirect()->back()->with('success', 'Sesi selesai. Data pembayaran berhasil disimpan.');
 }
+    // ==========================================================
+    // BAGIAN 2: CRUD BOOKING
+    // ==========================================================
 
-        // ==========================================================
-        // BAGIAN 2: CRUD BOOKING BARU (CREATE, STORE, EDIT, UPDATE, DELETE)
-        // ==========================================================
-
-        /**
-         * Menampilkan form tambah booking baru.
-     */
     public function create()
     {
         return view('staff.create');
     }
 
-    /**
-     * Menyimpan data booking baru ke database.
-     */
     public function store(Request $request)
     {
         $request->validate([
@@ -108,44 +102,34 @@ class StaffBookingController extends Controller
             'jam_selesai'    => 'required|after:jam_mulai',
         ]);
 
-        // Simpan ke database
         Booking::create([
             'nama_pelanggan'    => $request->nama_pelanggan,
             'no_hp'             => $request->no_hp,
             'tanggal'           => $request->tanggal,
             'jam_mulai'         => $request->jam_mulai,
             'jam_selesai'       => $request->jam_selesai,
-            'status_booking'    => 'booking', // Default status awal
-            'konfirmasi_datang' => true,      // Asumsi staff input = orangnya di tempat/fix
+            'status_booking'    => 'booking', 
+            'konfirmasi_datang' => true,      
+            'dp'                => 0,
+            'diskon'            => 0,
+            'status_pembayaran' => 'Belum Bayar',
+            'denda'             => 0,
+            'jam_tambahan'      => 0,
         ]);
 
-        return redirect()->route('staff.jadwal')->with('success', 'Booking berhasil ditambahkan!');
+        return redirect()->route('staff.jadwal')->with('success', 'Booking berhasil!');
     }
 
-    /**
-     * Menampilkan form edit data booking.
-     */
     public function edit($id)
     {
         $booking = Booking::findOrFail($id);
         return view('staff.edit', compact('booking'));
     }
 
-    /**
-     * Mengupdate data booking yang sudah ada.
-     */
     public function update(Request $request, $id)
     {
         $booking = Booking::findOrFail($id);
-
-        $request->validate([
-            'nama_pelanggan' => 'required|string|max:255',
-            'no_hp'          => 'required|string|max:20',
-            'tanggal'        => 'required|date',
-            'jam_mulai'      => 'required',
-            'jam_selesai'    => 'required|after:jam_mulai',
-        ]);
-
+        
         $booking->update([
             'nama_pelanggan' => $request->nama_pelanggan,
             'no_hp'          => $request->no_hp,
@@ -154,35 +138,25 @@ class StaffBookingController extends Controller
             'jam_selesai'    => $request->jam_selesai,
         ]);
 
-        return redirect()->route('staff.jadwal')->with('success', 'Data booking berhasil diperbarui.');
+        return redirect()->route('staff.jadwal')->with('success', 'Update berhasil.');
     }
 
-    /**
-     * Menghapus data booking.
-     */
     public function destroy($id)
     {
         $booking = Booking::findOrFail($id);
         $booking->delete();
-
-        return redirect()->route('staff.jadwal')->with('success', 'Booking berhasil dihapus.');
+        return redirect()->route('staff.jadwal')->with('success', 'Dihapus.');
     }
 
     // ==========================================================
-    // BAGIAN 3: PELAPORAN (RIWAYAT & CETAK STRUK)
+    // BAGIAN 3: PELAPORAN & STRUK (SUDAH DIPERBAIKI)
     // ==========================================================
 
-    /**
-     * Menampilkan halaman riwayat (History) booking yang sudah selesai/batal.
-     */
     public function riwayat(Request $request)
     {
         $query = Booking::query();
-
-        // Kita hanya ambil status 'selesai' atau 'batal' untuk riwayat
         $query->whereIn('status_booking', ['selesai', 'batal']);
 
-        // Logika Pencarian
         if ($request->has('q') && $request->q != '') {
             $search = $request->q;
             $query->where(function($q) use ($search) {
@@ -191,40 +165,42 @@ class StaffBookingController extends Controller
             });
         }
 
-        // Urutkan dari tanggal terbaru (descending)
-        $bookings = $query->orderBy('tanggal', 'desc')
-                          ->orderBy('jam_mulai', 'desc')
-                          ->get();
-
+        $bookings = $query->orderBy('tanggal', 'desc')->get();
         return view('staff.riwayat', compact('bookings'));
     }
 
     /**
-     * Menampilkan halaman cetak struk untuk booking tertentu.
+     * PERBAIKAN PENTING:
+     * Nama variabel disesuaikan menjadi '$totalBayar' agar View tidak Error.
      */
     public function cetakStruk($id)
     {
         $booking = Booking::findOrFail($id);
         
-        // 1. Hitung Durasi Main (Selisih Jam)
+        // 1. Hitung Durasi
         $start = Carbon::parse($booking->jam_mulai);
         $end   = Carbon::parse($booking->jam_selesai);
-        
-        // Menggunakan diffInMinutes dibagi 60 agar lebih akurat (bisa desimal misal 1.5 jam)
-        // Atau gunakan diffInHours jika ingin pembulatan jam penuh.
         $durasi = $end->diffInHours($start); 
-        if ($durasi == 0) $durasi = 1; // Minimal hitung 1 jam
+        if ($durasi == 0) $durasi = 1;
 
-        // 2. Tentukan Harga Per Jam (Hardcode sementara, atau ambil dari config/DB)
-        $hargaPerJam = 100000; 
-        
-        // 3. Hitung Kalkulasi Biaya
+        // 2. Hitung Biaya
+        $hargaPerJam  = 100000; 
         $biayaSewa    = $durasi * $hargaPerJam;
-        $biayaExtra   = ($booking->jam_tambahan ?? 0) * $hargaPerJam;
+        $biayaExtra   = ($booking->jam_tambahan ?? 0) * 50000; 
         $biayaDenda   = $booking->denda ?? 0;
         
+        // 3. TOTAL AKHIR (Nama variabel ini Wajib 'totalBayar')
         $totalBayar   = $biayaSewa + $biayaExtra + $biayaDenda;
+        
+        // Variabel tambahan agar view aman (mencegah error 'undefined variable')
+        $uangDibayar = $totalBayar; 
+        $kembalian   = 0;
+        $dp          = 0;
 
-        return view('staff.struk', compact('booking', 'durasi', 'biayaSewa', 'biayaExtra', 'biayaDenda', 'totalBayar'));
+        return view('staff.struk', compact(
+            'booking', 'durasi', 'hargaPerJam', 
+            'biayaSewa', 'biayaExtra', 'biayaDenda', 
+            'totalBayar', 'uangDibayar', 'kembalian', 'dp'
+        ));
     }
 }
