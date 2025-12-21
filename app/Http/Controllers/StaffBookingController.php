@@ -64,34 +64,24 @@ class StaffBookingController extends Controller
     /**
      * Menangani penyelesaian sesi (Finish), termasuk input denda/jam tambahan.
      */
-    public function finish(Request $request, $id)
-    {
-        $request->validate([
-            'jam_tambahan' => 'nullable|numeric|min:0',
-            'denda'        => 'nullable|numeric|min:0',
-        ]);
+   public function finish(Request $request, $id)
+{
+    $booking = Booking::findOrFail($id);
 
-        DB::beginTransaction();
-        try {
-            $booking = Booking::findOrFail($id);
+    $denda_manual = $request->denda ? str_replace('.', '', $request->denda) : 0;
+    $jam_tambahan = (int) $request->jam_tambahan;
+    $biaya_waktu  = $jam_tambahan * 50000;
 
-            // Simpan data tambahan jika ada
-            $booking->jam_tambahan   = $request->jam_tambahan ?? 0;
-            $booking->denda          = $request->denda ?? 0;
-            
-            // Ubah status menjadi selesai
-            $booking->status_booking = 'selesai';
-            $booking->save();
+    $total_bayar  = $denda_manual + $biaya_waktu;
 
-            DB::commit();
+    $booking->update([
+        'status_booking' => 'selesai',
+        'jam_tambahan'   => $jam_tambahan,
+        'denda'          => $total_bayar,
+    ]);
 
-            return redirect()->back()->with('success', "Sesi {$booking->nama_pelanggan} SELESAI.");
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return redirect()->back()->with('error', 'Terjadi kesalahan saat menyimpan data.');
-        }
-    }
+    return redirect()->back()->with('success', 'Sesi selesai. Total: Rp ' . number_format($total_bayar));
+}
 
         // ==========================================================
         // BAGIAN 2: CRUD BOOKING BARU (CREATE, STORE, EDIT, UPDATE, DELETE)
