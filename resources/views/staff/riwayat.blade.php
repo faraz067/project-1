@@ -33,10 +33,10 @@
                     <thead class="bg-light">
                         <tr>
                             <th class="ps-4 py-4 text-uppercase text-secondary small fw-bold" style="width: 20%;">Tanggal & Waktu</th>
-                            <th class="text-uppercase text-secondary small fw-bold" style="width: 25%;">Pelanggan</th>
+                            <th class="text-uppercase text-secondary small fw-bold" style="width: 30%;">Pelanggan</th>
                             <th class="text-uppercase text-secondary small fw-bold" style="width: 15%;">Status</th>
-                            <th class="text-uppercase text-secondary small fw-bold" style="width: 25%;">Catatan Biaya</th>
-                            <th class="text-end pe-4 text-uppercase text-secondary small fw-bold">Aksi</th>
+                            <th class="text-uppercase text-secondary small fw-bold" style="width: 35%;">Catatan Biaya</th>
+                            {{-- KOLOM AKSI DIHAPUS --}}
                         </tr>
                     </thead>
                     <tbody>
@@ -70,7 +70,7 @@
                                 <div class="d-flex align-items-center">
                                     <div class="avatar-gradient rounded-circle text-white fw-bold me-3 d-flex align-items-center justify-content-center shadow-sm" 
                                          style="width: 40px; height: 40px;">
-                                        {{ substr($booking->nama_pelanggan, 0, 1) }}
+                                    {{ substr($booking->nama_pelanggan, 0, 1) }}
                                     </div>
                                     <div>
                                         <div class="fw-bold text-dark">{{ $booking->nama_pelanggan }}</div>
@@ -121,24 +121,12 @@
                                     <span class="text-muted small">-</span>
                                 @endif
                             </td>
-
-                            {{-- AKSI --}}
-                            <td class="text-end pe-4">
-                                @if($booking->status_booking == 'selesai')
-                                    <a href="{{ route('staff.struk', $booking->id) }}" target="_blank" 
-                                       class="btn btn-sm btn-outline-dark rounded-pill px-3 shadow-sm btn-hover-scale fw-bold">
-                                        <i class="bi bi-printer-fill me-1"></i> Cetak Struk
-                                    </a>
-                                @else
-                                    <button class="btn btn-sm btn-light text-muted rounded-pill px-3" disabled>
-                                        <i class="bi bi-slash-circle me-1"></i> No Action
-                                    </button>
-                                @endif
-                            </td>
+                            
+                            {{-- KOLOM AKSI DIHAPUS --}}
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="5" class="text-center py-5">
+                            <td colspan="4" class="text-center py-5"> {{-- COLSPAN DIUBAH JADI 4 --}}
                                 <div class="py-5 opacity-50">
                                     <div class="bg-light rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 80px; height: 80px;">
                                         <i class="bi bi-folder-x text-muted fs-1"></i>
@@ -182,15 +170,6 @@
     .date-box {
         background-color: #fff;
         border-color: #e9ecef !important;
-    }
-
-    /* Efek Hover Button */
-    .btn-hover-scale:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
-        transition: all 0.2s;
-        background-color: #212529;
-        color: white;
     }
 
     /* Form Control Focus */
